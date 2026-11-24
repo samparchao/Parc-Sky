@@ -1,4 +1,4 @@
-using Microsoft.UI;
+﻿using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -75,6 +75,8 @@ namespace WeatherApp
         private double currentLatitude;
         private double currentLongitude;
 
+        private readonly Canvas sky = new() { IsHitTestVisible = false };
+        private int? skyCode;
         private TextBlock heroTemp;
         private TextBlock heroCondIcon;
         private TextBlock heroCondText;
@@ -170,7 +172,7 @@ namespace WeatherApp
 
         private record SavedTrackedCity(string Name, double Latitude, double Longitude);
 
-        private record MapTrackedCity(string Name, double Latitude, double Longitude, bool IsFavorite, bool IsActive, double Temperature);
+        private record MapTrackedCity(string Name, double Latitude, double Longitude, bool IsFavorite, bool IsActive, string Temperature, double? CloudCover);
 
         private record CityPickerItem(Int32 Index, String Name, String Temperature, String Condition);
 
@@ -267,6 +269,8 @@ namespace WeatherApp
             }
             catch
             {
+                skyCode = null;
+                PaintSky();
                 heroCondText.Text = "Weather unavailable";
             }
 
@@ -414,6 +418,8 @@ namespace WeatherApp
         private void ApplyWeatherToUI(WeatherService.WeatherData weather)
         {
             WeatherService.CurrentWeather current = weather.Current;
+            skyCode = current.WeatherCode;
+            PaintSky();
             heroTemp.Text = FormatTemperature(current.Temperature);
 
             var (desc, icon, r, g, b) = WeatherService.MapWeatherCode(current.WeatherCode);
@@ -579,6 +585,56 @@ namespace WeatherApp
             }
         }
 
+        private void PaintSky()
+        {
+            sky.Children.Clear();
+            if (skyCode is not int code || sky.ActualWidth < 1 || sky.ActualHeight < 1) return;
+            double width = sky.ActualWidth;
+            double height = sky.ActualHeight;
+            sky.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, width, height) };
+            bool mist = code is 2 or 3 or 45 or 48;
+            bool snow = code is >= 71 and <= 77 or 85 or 86;
+            bool rain = code >= 51 && !snow;
+            bool motion = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
+            var random = new Random(23);
+            for (int i = 0; i < (mist ? 8 : 46); i++)
+            {
+                double size = 1 + random.NextDouble() * (snow ? 4 : 2);
+                var mote = new Ellipse
+                {
+                    Width = mist ? width * 0.62 : size,
+                    Height = mist ? 48 : rain ? size * 5 : size,
+                    Fill = mist ? new RadialGradientBrush
+                    {
+                        GradientStops = { new GradientStop { Color = Colors.White }, new GradientStop { Color = Colors.Transparent, Offset = 1 } }
+                    } : new SolidColorBrush(Colors.White),
+                    Opacity = mist ? 0.13 : 0.12 + random.NextDouble() * 0.27
+                };
+                Canvas.SetLeft(mote, (random.NextDouble() - (mist ? 0.2 : 0)) * width);
+                double y = random.NextDouble() * height;
+                Canvas.SetTop(mote, y);
+                sky.Children.Add(mote);
+                if (!motion) continue;
+                var visual = ElementCompositionPreview.GetElementVisual(mote);
+                var anim = visual.Compositor.CreateScalarKeyFrameAnimation();
+                bool falling = snow || rain;
+                float start = falling ? (float)(-y - 16) : mist ? -45f : 0.08f;
+                float end = falling ? (float)(height - y + 16) : mist ? 45f : 0.38f;
+                anim.InsertKeyFrame(0, start);
+                anim.InsertKeyFrame(1, end, visual.Compositor.CreateLinearEasingFunction());
+                anim.Duration = TimeSpan.FromSeconds((rain ? 2 : snow ? 9 : mist ? 24 : 4) * (1 + random.NextDouble()));
+                anim.IterationBehavior = AnimationIterationBehavior.Forever;
+                if (!falling) anim.Direction = AnimationDirection.Alternate;
+                if (falling)
+                {
+                    // Keep particles staggered from the first frame.
+                    anim.DelayTime = TimeSpan.FromSeconds(random.NextDouble() * anim.Duration.TotalSeconds);
+                }
+                if (falling || mist) ElementCompositionPreview.SetIsTranslationEnabled(mote, true);
+                visual.StartAnimation(falling ? "Translation.Y" : mist ? "Translation.X" : "Opacity", anim);
+            }
+        }
+
         private void BuildUI()
         {
             Grid rootGrid = new()
@@ -602,6 +658,10 @@ namespace WeatherApp
             rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            Grid.SetRowSpan(sky, 4);
+            rootGrid.Children.Add(sky);
+            sky.SizeChanged += (_, _) => PaintSky();
 
             // Location header
             StackPanel headerStack = new()
@@ -1232,6 +1292,8 @@ namespace WeatherApp
                 Foreground = new SolidColorBrush(Colors.White),
                 BorderThickness = new Thickness(0)
             };
+            ToolTipService.SetToolTip(mapToggleButton, "Toggle observing map");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mapToggleButton, "Toggle observing map");
             mapToggleButton.Click += OnMapToggleButtonClick;
             Grid.SetColumn(mapToggleButton, 0);
             grid.Children.Add(mapToggleButton);
@@ -1676,11 +1738,13 @@ namespace WeatherApp
             {
                 TrackedCity trackedCity = trackedCities[i];
                 String cityKey = GetCityKey(trackedCity.Latitude, trackedCity.Longitude);
-                Double temperature = 0;
+                string temperature = null;
+                double? cloudCover = null;
 
                 if (trackedCityWeather.TryGetValue(cityKey, out WeatherService.WeatherData weatherData))
                 {
-                    temperature = weatherData.Current.Temperature;
+                    temperature = FormatTemperature(weatherData.Current.Temperature) + (temperatureUnit == TemperatureUnit.Fahrenheit ? "F" : "C");
+                    cloudCover = weatherData.Current.CloudCover;
                 }
 
                 mapCities.Add(new MapTrackedCity(
@@ -1689,7 +1753,7 @@ namespace WeatherApp
                     trackedCity.Longitude,
                     trackedCity.IsFavorite,
                     i == activeTrackedCityIndex,
-                    temperature));
+                    temperature, cloudCover));
             }
 
             JsonSerializerOptions jsonOptions = new JsonSerializerOptions
@@ -1697,7 +1761,7 @@ namespace WeatherApp
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
             String payload = JsonSerializer.Serialize(mapCities, jsonOptions);
-            String script = $"window.setTrackedCities({payload});";
+            String script = $"window.setTrackedCities?.({payload});";
             await mapWebView.CoreWebView2.ExecuteScriptAsync(script);
         }
 
@@ -2258,7 +2322,7 @@ namespace WeatherApp
             Double converted = temperatureUnit == TemperatureUnit.Fahrenheit
                 ? (temperature * 9 / 5) + 32
                 : temperature;
-            return $"{converted:F0}�";
+            return $"{converted:F0}°";
         }
 
         private static string GetWindDirection(double degrees)
