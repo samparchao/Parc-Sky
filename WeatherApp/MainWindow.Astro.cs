@@ -18,7 +18,7 @@ namespace WeatherApp
     {
         private Grid CreateAstroPage()
         {
-            Grid astroGrid = new Grid
+            Grid astroGrid = new()
             {
                 Visibility = Visibility.Collapsed,
                 Margin = new Thickness(0),
@@ -38,7 +38,7 @@ namespace WeatherApp
             astroGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             astroGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            StackPanel headerStack = new StackPanel
+            StackPanel headerStack = new()
             {
                 Spacing = 6,
                 Margin = new Thickness(12, 46, 12, 10)
@@ -48,7 +48,7 @@ namespace WeatherApp
             topHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             topHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            Button closeAstroButton = new Button
+            Button closeAstroButton = new()
             {
                 Content = new SymbolIcon(Symbol.Back),
                 Width = 34,
