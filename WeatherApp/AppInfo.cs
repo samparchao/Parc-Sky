@@ -1,5 +1,5 @@
+// Parc Sky | AppInfo.cs
 // Created by Samuel Teixeira Parchao
-// Last modified: 13/02/2026
 
 namespace WeatherApp;
 
@@ -10,7 +10,9 @@ namespace WeatherApp;
 /// use and should not be exposed to external consumers.</remarks>
 internal static class AppInfo
 {
-    public const string Version = "0.1.1";
+    /// <summary>Version displayed in the About panel.</summary>
+    public const string Version = "0.2.1";
 
+    /// <summary>Creator credit displayed in the About panel.</summary>
     public const string AboutText = "Created by: Samuel Teixeira Parchao";
 }

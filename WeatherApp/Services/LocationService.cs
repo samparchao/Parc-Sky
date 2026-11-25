@@ -1,6 +1,13 @@
+// Parc Sky | LocationService.cs
+// Created by Samuel Teixeira Parchao
+
 // Created by Samuel Teixeira Parchao
 // Last modified: 13/02/2026
+#nullable enable
+
 using System;
+using System.Globalization;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -24,6 +31,22 @@ internal sealed class LocationService
     public record LocationResult(string CityName, double Latitude, double Longitude);
 
     /// <summary>
+    /// Represents a city search result item with display text and location coordinates.
+    /// </summary>
+    /// <param name="CityName">Short city name shown in compact UI contexts.</param>
+    /// <param name="DisplayName">Expanded location label including country or region.</param>
+    /// <param name="Latitude">Latitude in decimal degrees.</param>
+    /// <param name="Longitude">Longitude in decimal degrees.</param>
+    public record CitySearchResult(string CityName, string DisplayName, double Latitude, double Longitude)
+    {
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            return DisplayName;
+        }
+    }
+
+    /// <summary>
     /// Asynchronously retrieves the device's current geographic location, including latitude, longitude, and the
     /// associated city name.
     /// </summary>
@@ -34,44 +57,113 @@ internal sealed class LocationService
     /// location access is denied, the result contains default coordinates and an error message.</returns>
     public static async Task<LocationResult> GetCurrentLocationAsync()
     {
-        var status = await Geolocator.RequestAccessAsync();
+        GeolocationAccessStatus status = await Geolocator.RequestAccessAsync();
         if (status != GeolocationAccessStatus.Allowed)
             return new LocationResult("Location denied", 0, 0);
 
-        var geolocator = new Geolocator { DesiredAccuracyInMeters = 1000 };
-        var position = await geolocator.GetGeopositionAsync();
-        var lat = position.Coordinate.Point.Position.Latitude;
-        var lon = position.Coordinate.Point.Position.Longitude;
+        Geolocator geolocator = new Geolocator { DesiredAccuracyInMeters = 1000 };
+        Geoposition position = await geolocator.GetGeopositionAsync();
+        Double lat = position.Coordinate.Point.Position.Latitude;
+        Double lon = position.Coordinate.Point.Position.Longitude;
 
-        var cityName = await ReverseGeocodeAsync(lat, lon);
+        String cityName = await ReverseGeocodeAsync(lat, lon);
         return new LocationResult(cityName, lat, lon);
+    }
+
+    /// <summary>Finds candidate cities by name.</summary>
+    /// <param name="query">City name to search for.</param>
+    /// <param name="limit">Maximum number of results.</param>
+    /// <returns>Matching locations with their coordinates.</returns>
+    public static async Task<IReadOnlyList<CitySearchResult>> SearchCitiesAsync(string query, int limit = 6)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return Array.Empty<CitySearchResult>();
+        }
+
+        String escapedQuery = Uri.EscapeDataString(query.Trim());
+        Int32 safeLimit = Math.Clamp(limit, 1, 10);
+        String url = $"https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&accept-language=en&limit={safeLimit}&q={escapedQuery}";
+
+        using HttpResponseMessage response = await Http.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+
+        using JsonDocument doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        JsonElement root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<CitySearchResult>();
+        }
+
+        List<CitySearchResult> cities = new List<CitySearchResult>();
+        foreach (JsonElement element in root.EnumerateArray())
+        {
+            if (!element.TryGetProperty("lat", out JsonElement latElement) ||
+                !element.TryGetProperty("lon", out JsonElement lonElement))
+            {
+                continue;
+            }
+
+            if (!Double.TryParse(latElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out Double latitude) ||
+                !Double.TryParse(lonElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out Double longitude))
+            {
+                continue;
+            }
+
+            String displayName = element.TryGetProperty("display_name", out JsonElement displayElement)
+                ? displayElement.GetString() ?? "Unknown location"
+                : "Unknown location";
+
+            String cityName = BuildCityLabel(element, displayName);
+            cities.Add(new CitySearchResult(cityName, displayName, latitude, longitude));
+        }
+
+        return cities;
+    }
+
+    private static String BuildCityLabel(JsonElement element, String fallback)
+    {
+        if (!element.TryGetProperty("address", out JsonElement address))
+        {
+            return fallback.Split(',')[0];
+        }
+
+        String? label = TryGetAddressValue(address, "city")
+            ?? TryGetAddressValue(address, "town")
+            ?? TryGetAddressValue(address, "village")
+            ?? TryGetAddressValue(address, "municipality")
+            ?? TryGetAddressValue(address, "state");
+
+        return string.IsNullOrWhiteSpace(label)
+            ? fallback.Split(',')[0]
+            : label;
     }
 
     private static async Task<string> ReverseGeocodeAsync(double lat, double lon)
     {
         try
         {
-            var url = FormattableString.Invariant(
+            String url = FormattableString.Invariant(
                 $"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=en");
 
-            using var response = await Http.GetAsync(url);
+            using HttpResponseMessage response = await Http.GetAsync(url);
             response.EnsureSuccessStatusCode();
 
-            using var doc = await JsonDocument.ParseAsync(
+            using JsonDocument doc = await JsonDocument.ParseAsync(
                 await response.Content.ReadAsStreamAsync());
 
-            var address = doc.RootElement.GetProperty("address");
+            JsonElement address = doc.RootElement.GetProperty("address");
 
-            if (address.TryGetProperty("city", out var city))
-                return city.GetString()!;
-            if (address.TryGetProperty("town", out var town))
-                return town.GetString()!;
-            if (address.TryGetProperty("village", out var village))
-                return village.GetString()!;
-            if (address.TryGetProperty("county", out var county))
-                return county.GetString()!;
-            if (address.TryGetProperty("state", out var state))
-                return state.GetString()!;
+            String? location = TryGetAddressValue(address, "city")
+                ?? TryGetAddressValue(address, "town")
+                ?? TryGetAddressValue(address, "village")
+                ?? TryGetAddressValue(address, "county")
+                ?? TryGetAddressValue(address, "state");
+
+            if (!string.IsNullOrWhiteSpace(location))
+            {
+                return location;
+            }
 
             return doc.RootElement.GetProperty("display_name")
                 .GetString()!.Split(',')[0];
@@ -80,5 +172,16 @@ internal sealed class LocationService
         {
             return "Unknown Location";
         }
+    }
+
+    private static String? TryGetAddressValue(JsonElement address, String propertyName)
+    {
+        if (!address.TryGetProperty(propertyName, out JsonElement valueElement))
+        {
+            return null;
+        }
+
+        String? value = valueElement.GetString();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }
