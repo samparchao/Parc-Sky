@@ -39,3 +39,6 @@ main{padding-bottom:48px}section{background:linear-gradient(145deg,#ffffff0e,#ff
 #bortleEditor{max-width:320px;margin:12px 0}
 .mapPoint{min-width:190px;color:#182936;font:13px/1.5 "Segoe UI",sans-serif}.mapPoint>strong{font-size:15px}.mapPoint small{display:block;color:#4c6170}.mapPoint>div{margin-top:6px}.mapReading{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-top:1px solid #e4ebef}.mapClusterSite{display:block;width:100%;margin:4px 0;text-align:left}
 .headerActions{display:flex;gap:7px}.preferences{display:grid;gap:12px}.aboutApp{display:flex;align-items:center;gap:12px;border-top:1px solid #ffffff20;margin-top:20px;padding-top:16px}.aboutApp img{width:44px;height:44px}.aboutApp h2,.aboutApp p{margin:0}.savedLocation{display:flex;justify-content:space-between;gap:8px}.savedLocation button:first-child{text-align:left;flex:1}.noTarget .framing,.noTarget .targetCard details,.noTarget #save,.noTarget #progress{display:none}#targetStatus{margin:4px 0 8px;color:#b8c7d0;font-size:12px}
+
+.dataCredit{font-size:12px;margin:12px 0 0}.dataCredit a,.optics figcaption a{color:inherit;text-underline-offset:2px}
+main>.dataCredit{grid-column:1/-1}

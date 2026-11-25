@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<ItemGroup>
 		<Content Include="Planner\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-		<Content Include="Assets\weathericons-regular-webfont.ttf">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</Content>
     </ItemGroup>
   <PropertyGroup>
     <ApplicationIcon>Assets\ParcSky.ico</ApplicationIcon>
@@ -48,9 +45,6 @@
   -->
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Assets\WeatherIcons\" />
   </ItemGroup>
 
   <!--

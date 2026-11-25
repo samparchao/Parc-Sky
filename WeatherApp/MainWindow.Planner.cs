@@ -83,6 +83,14 @@ public sealed partial class MainWindow
                         case "wind:MilesPerHour": ChangeUnits(temperatureUnit, WindSpeedUnit.MilesPerHour); break;
                     }
                 };
+                core.NewWindowRequested += async (_, args) =>
+                {
+                    args.Handled = true;
+                    if (!IsCreditLink(args.Uri)) return;
+                    using var deferral = args.GetDeferral();
+                    try { await Windows.System.Launcher.LaunchUriAsync(new Uri(args.Uri)); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
+                };
                 core.NavigationStarting += (_, args) => args.Cancel = args.Uri != "https://planner.example/index.html";
                 shootPlanner.Source = new Uri("https://planner.example/index.html");
             }
@@ -94,6 +102,12 @@ public sealed partial class MainWindow
             Content = new TextBlock { Text = "Parc Sky could not open. Check that Microsoft Edge WebView2 Runtime is installed.", Margin = new Thickness(24), TextWrapping = TextWrapping.Wrap };
         }
     }
+
+    private static bool IsCreditLink(string uri) => uri is
+        "https://open-meteo.com/" or
+        "https://creativecommons.org/licenses/by/4.0/" or
+        "https://www.openstreetmap.org/copyright" or
+        "https://stdatu.stsci.edu/publishing/data-use";
 
     private async Task SendMapForecastAsync(CoreWebView2 core, string json, bool point)
     {

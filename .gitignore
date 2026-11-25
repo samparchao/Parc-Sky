@@ -1,4 +1,33 @@
-/.vs
-/WeatherApp/bin
-/WeatherApp/obj
-WeatherApp/obj
+# Visual Studio and per-user settings
+.vs/
+*.user
+*.suo
+*.rsuser
+*.userosscache
+
+# Build output and package artifacts
+[Bb]in/
+[Oo]bj/
+AppPackages/
+BundleArtifacts/
+TestResults/
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.appxupload
+*.msixupload
+*.pubxml.user
+
+# Local configuration and private signing material
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pvk
+*.key
+
+# Retired native forecast icon assets
+/WeatherApp/Assets/WeatherIcons/
+/WeatherApp/Assets/weathericons-regular-webfont.ttf
