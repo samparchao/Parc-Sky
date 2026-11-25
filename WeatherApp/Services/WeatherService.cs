@@ -73,9 +73,9 @@ internal sealed class WeatherService
         double PrecipitationProbability,
         double Precipitation,
         double CloudCover,
-        int? AirQualityIndex);
+        int? AirQualityIndex, double? Rainfall);
 
-    public record WeatherData(CurrentWeather Current, DailyForecast[] Daily, HourlyForecast[] Hourly);
+    public record WeatherData(CurrentWeather Current, DailyForecast[] Daily, HourlyForecast[] Hourly, string TimeZone);
 
     /// <summary>
     /// Asynchronously retrieves current and 7-day weather forecast data for the specified geographic coordinates.
@@ -93,7 +93,7 @@ internal sealed class WeatherService
     public static async Task<WeatherData> GetWeatherAsync(double latitude, double longitude)
     {
         String url = FormattableString.Invariant(
-            $"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,uv_index,apparent_temperature,dew_point_2m,surface_pressure,cloud_cover&hourly=temperature_2m,apparent_temperature,dew_point_2m,surface_pressure,wind_gusts_10m,precipitation_probability,precipitation,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,daylight_duration&timezone=auto&forecast_days=7");
+            $"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,uv_index,apparent_temperature,dew_point_2m,surface_pressure,cloud_cover&hourly=temperature_2m,apparent_temperature,dew_point_2m,surface_pressure,wind_gusts_10m,precipitation_probability,precipitation,rain,showers,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,daylight_duration&timezone=auto&forecast_days=7");
 
         using HttpResponseMessage response = await Http.GetAsync(url);
         response.EnsureSuccessStatusCode();
@@ -165,6 +165,8 @@ internal sealed class WeatherService
         JsonElement hourlyGust = hourly.GetProperty("wind_gusts_10m");
         JsonElement hourlyPrecipProb = hourly.GetProperty("precipitation_probability");
         JsonElement hourlyPrecip = hourly.GetProperty("precipitation");
+        JsonElement rain = hourly.GetProperty("rain");
+        JsonElement showers = hourly.GetProperty("showers");
         JsonElement hourlyCloud = hourly.GetProperty("cloud_cover");
 
         Int32 hourlyCount = hourlyTimes.GetArrayLength();
@@ -184,10 +186,11 @@ internal sealed class WeatherService
                 hourlyPrecipProb[i].GetDouble(),
                 hourlyPrecip[i].GetDouble(),
                 hourlyCloud[i].GetDouble(),
-                hourAqi);
+                hourAqi,
+                rain[i].ValueKind == JsonValueKind.Number && showers[i].ValueKind == JsonValueKind.Number ? rain[i].GetDouble() + showers[i].GetDouble() : null);
         }
 
-        return new WeatherData(current, forecasts, hourlyForecasts);
+        return new WeatherData(current, forecasts, hourlyForecasts, root.GetProperty("timezone").GetString());
     }
 
     private static async Task<Dictionary<DateTime, Int32>> GetHourlyAirQualityAsync(Double latitude, Double longitude)

@@ -1,12 +1,12 @@
-namespace WeatherApp.Elements;
+﻿namespace WeatherApp.Elements;
 
 public class WindowElements
 {
     public static string GetMapHtml() => """
         <!doctype html>
         <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <link rel="stylesheet" href="https://planner.example/leaflet.css">
+        <script src="https://planner.example/leaflet.js"></script>
         <style>
         *{box-sizing:border-box}body{margin:0;font:14px 'Segoe UI Variable',sans-serif;color:white;background:#18283b}
         #map{height:100vh;background:#26384a}.leaflet-tile-pane{filter:saturate(.45) brightness(.84)}
@@ -16,7 +16,7 @@ public class WindowElements
         .pin{text-align:center;color:white;font:600 12px 'Segoe UI',sans-serif}.pin b,.pin small{display:table;margin:auto;background:#20344a;border-radius:12px;padding:3px 8px;white-space:nowrap}
         .pin b{font-size:14px;background:#34597a}.pin.active b{outline:2px solid white}.pin small{margin-top:3px}
         #status{font-size:12px;color:#d1deeb;margin:8px 0 0} 
-        </style></head><body><div id="map" aria-label="Map of saved observing locations"></div>
+        </style><script src="https://planner.example/geography.js"></script><script src="https://planner.example/basemap.js"></script></head><body><div id="map" aria-label="Map of saved observing locations"></div>
         <aside><h1>Observing map</h1><button id="cloud" aria-pressed="true">Cloud cover</button>
         <button id="temp" aria-pressed="false">Temperature</button> <button id="fit">Fit sites</button>
         <p id="status" role="status">Loading map…</p></aside>
@@ -25,9 +25,7 @@ public class WindowElements
         if(!window.L){statusLine.textContent='Map unavailable. Check your connection.';}
         else {
             const map=L.map('map',{zoomControl:false}).setView([25,0],2);
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
-                attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            }).addTo(map);
+            addBasemap(map);
             L.control.zoom({position:'topright'}).addTo(map);
             const pins=L.layerGroup().addTo(map);
             let cities=[], metric='cloud', lastSite;

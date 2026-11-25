@@ -1,0 +1,3 @@
+Sky brightness raster: Falchi et al. (2016), Supplement to The New World Atlas of Artificial Night Sky Brightness. GFZ Data Services. https://doi.org/10.5880/GFZ.1.4.2016.001
+License: Creative Commons Attribution-NonCommercial 4.0 International, https://creativecommons.org/licenses/by-nc/4.0/
+Parc Sky assembled the published KMZ imagery, resampled it and reprojected it to Web Mercator for display.

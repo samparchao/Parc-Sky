@@ -187,8 +187,8 @@ namespace WeatherApp
         public MainWindow()
         {
             this.InitializeComponent();
-            this.Title = "Weather";
-            this.ExtendsContentIntoTitleBar = true;
+            this.Title = "Parc Sky";
+            this.ExtendsContentIntoTitleBar = false;
             this.AppWindow.Resize(new Windows.Graphics.SizeInt32(480, 780));
             PositionWindowBottomRight();
 
@@ -208,10 +208,14 @@ namespace WeatherApp
             catch
             {
                 locationText.Text = "Location unavailable";
+                if (trackedCities.Count > 0) { activeTrackedCityIndex = 0; await LoadWeatherForActiveCityAsync(); }
+                SendPlannerSites();
                 return;
             }
 
-            EnsureCurrentLocationTracked(currentLocation);
+            if (currentLocation.CityName != "Location denied") EnsureCurrentLocationTracked(currentLocation);
+            if (trackedCities.Count == 0) { SendPlannerSites(); return; }
+            if (activeTrackedCityIndex < 0) activeTrackedCityIndex = 0;
             await LoadWeatherForActiveCityAsync();
         }
 
@@ -276,6 +280,7 @@ namespace WeatherApp
 
             RefreshCityNavigator();
             RefreshCityListPage();
+            SendPlannerSites();
             await SyncMapTrackedCitiesAsync();
             await EnsureTrackedCitiesWeatherAsync();
         }
@@ -310,6 +315,7 @@ namespace WeatherApp
             }
 
             RefreshCityListPage();
+            SendPlannerSites();
             await SyncMapTrackedCitiesAsync();
         }
 
@@ -667,7 +673,7 @@ namespace WeatherApp
             StackPanel headerStack = new()
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 48, 0, 0),
+                Margin = new Thickness(0, 12, 0, 0),
                 Spacing = 2
             };
 
@@ -829,6 +835,10 @@ namespace WeatherApp
                 CharacterSpacing = 80,
                 FontFamily = TextFont
             };
+            var openPlanner = new Button { Content = "Plan a shoot", HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 24, 6), CornerRadius = new CornerRadius(10) };
+            openPlanner.Click += async (_, _) => await OpenPlannerAsync();
+            forecastContent.Children.Add(openPlanner);
+            forecastHeader.IsHitTestVisible = false;
             Grid.SetRow(forecastHeader, 0);
             forecastContent.Children.Add(forecastHeader);
 
@@ -867,6 +877,11 @@ namespace WeatherApp
             Grid.SetRowSpan(astroContent, 4);
             Canvas.SetZIndex(astroContent, 20);
             rootGrid.Children.Add(astroContent);
+
+            Grid.SetRowSpan(shootPlanner, 4);
+            Canvas.SetZIndex(shootPlanner, 40);
+            rootGrid.Children.Add(shootPlanner);
+            shootPlanner.Loaded += async (_, _) => await OpenPlannerAsync();
 
             // Overlay & details sheet
             BuildOverlay(rootGrid);
@@ -1571,10 +1586,12 @@ namespace WeatherApp
                 await mapWebView.EnsureCoreWebView2Async();
                 mapWebView.DefaultBackgroundColor = Color.FromArgb(0xFF, 0xE6, 0xEC, 0xF5);
                 mapWebView.NavigationCompleted += OnMapNavigationCompleted;
+                mapWebView.CoreWebView2.SetVirtualHostNameToFolderMapping("planner.example", System.IO.Path.Combine(AppContext.BaseDirectory, "Planner"), CoreWebView2HostResourceAccessKind.Allow);
                 mapWebView.NavigateToString(WindowElements.GetMapHtml());
             }
 
             await EnsureTrackedCitiesWeatherAsync();
+            SendPlannerSites();
             await SyncMapTrackedCitiesAsync();
         }
 
@@ -1723,6 +1740,7 @@ namespace WeatherApp
                 return;
             }
 
+            SendPlannerSites();
             await SyncMapTrackedCitiesAsync();
         }
 
@@ -2057,7 +2075,7 @@ namespace WeatherApp
                 MaxWidth = 460,
                 MaxHeight = 520,
                 MinHeight = 300,
-                Margin = new Thickness(0, 48, 0, 0),
+                Margin = new Thickness(0, 12, 0, 0),
                 RenderTransform = new TranslateTransform { Y = 500 },
                 Background = new AcrylicBrush
                 {
@@ -2081,7 +2099,7 @@ namespace WeatherApp
             trayIcon = new TrayIcon
             {
                 Icon = LoadTrayIcon(),
-                ToolTipText = "Weather"
+                ToolTipText = "Parc Sky"
             };
 
             trayIcon.MenuItems.Add(new TrayMenuItem("Open", ShowFromTray));
