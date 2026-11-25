@@ -1,3 +1,5 @@
+// Parc Sky | sky.js
+
 const skyWeather=(()=>{
   const canvas=document.getElementById('skyScene'),ctx=canvas.getContext('2d');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');

@@ -1,3 +1,5 @@
+// Parc Sky | map-layers.js
+
 const mapModes = {
   temperature: {index:0, colors:['#5443a9','#426ddd','#57ccea','#c2e9ab','#ffde62','#ff963d','#e74763'], stops:[-30,-18,-6,6,18,30,42]},
   cloud: {index:1, colors:['#27415d','#526c8c','#899db8','#c6d4e4','#f5f8fc'], stops:[0,25,50,75,100]},
@@ -13,7 +15,7 @@ function mapLabel(mode,value){
   if(mode==='temperature')return temperatureLabel(value);
   if(mode==='cloud')return Math.round(value)+'%';
   if(mode==='rain')return value.toFixed(1)+' mm';
-  return Math.round(value)+' km/h';
+  return site.mph?Math.round(value*.621371)+' mph':Math.round(value)+' km/h';
 }
 function mapColor(mode,value){
   const {colors,stops}=mapModes[mode];

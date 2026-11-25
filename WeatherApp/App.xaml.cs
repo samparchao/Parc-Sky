@@ -1,5 +1,5 @@
-﻿// Created by Samuel Teixeira Parchao
-// Last modified: 13/02/2026
+// Parc Sky | App.xaml.cs
+// Created by Samuel Teixeira Parchao
 
 using Microsoft.UI.Xaml;
 
@@ -23,6 +23,7 @@ namespace WeatherApp
             this.InitializeComponent();
         }
 
+        /// <inheritdoc/>
         protected override void OnLaunched(LaunchActivatedEventArgs args)
         {
             m_window = new MainWindow();

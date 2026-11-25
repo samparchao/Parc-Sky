@@ -1,3 +1,5 @@
+// Parc Sky | planner.js
+
 const el=id=>document.getElementById(id);
 const dirs=['N','NE','E','SE','S','SW','W','NW'];
 const fmt=(t,zone)=>localStamp(t,zone).slice(11);
@@ -7,7 +9,13 @@ const horizons=load('horizons-v1',{}),projects=load('projects-v1',{});
 const horizonFor=s=>horizons[s.key]??Array(8).fill(25);
 let sites=[],site,results=[],selected,rows=[],map,pins,ticks=[],projectKey,activeKey;
 const cache=new Map();
-let planKey='', comparisonSites=[];
+let planKey='', comparisonSites=[], recommendations=[];
+const portraitIds=new Set(["M101", "M13", "M27", "M31", "M33", "M42", "M45", "M51", "M57", "M81", "NGC104", "NGC253", "NGC3372", "NGC5139"]);
+const targetById=new Map(targets.map(target=>[target[0],target]));
+const normalizeTarget=value=>value.toLowerCase().replace(/\s+/g,'').replace(/^(ngc|ic|m|b|c)0+(?=\d)/,'$1');
+const catalogSearch=targets.map(target=>[target,normalizeTarget(target[0]),normalizeTarget(target[1]+' '+target[8])]);
+const brightCatalog=targets.filter(target=>target[0].startsWith('M')||(target[7]!=null && target[7]<=11)||target[4]>=15)
+  .sort((a,b)=>(a[7]??11)-(b[7]??11));
 function option(text,value){return new Option(text,value);}
 function line(parent,text,tag='p'){const node=document.createElement(tag);node.textContent=text;parent.append(node);return node;}
 function persist(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true;}catch{alert('Could not save to local storage.');return false;}}
@@ -16,12 +24,20 @@ function chooseSites(incoming){
   sites=incoming;cache.clear();planKey='';
   el('site').replaceChildren(...sites.map(s=>option(s.name,s.key)));
   el('site').value=(activeKey===active && sites.some(s=>s.key===previous)?previous:active)??sites[0]?.key??'';
-  activeKey=active;changeSite();
+  activeKey=active;
+  el('savedLocations').replaceChildren();
+  for(const location of sites.filter(location=>location.saved)){
+    const row=line(el('savedLocations'),'','div');row.className='savedLocation';
+    const select=line(row,location.name,'button');select.onclick=()=>{el('site').value=location.key;el('site').onchange();el('locations').close();};
+    const remove=line(row,'Remove','button');remove.setAttribute('aria-label','Remove '+location.name);
+    remove.onclick=()=>window.chrome.webview.postMessage('remove:'+location.key);
+  }
+  changeSite();
 }
 function changeSite(){
   site=sites.find(s=>s.key===el('site').value);
   el('workspace').hidden=!site?.zone;el('empty').hidden=!!site?.zone;
-  if(!site?.zone){renderWeather();el('empty').textContent=site?'Hourly forecast unavailable. Open Manage locations to refresh or choose another site.':'Open Manage locations to add an observing site.';return;}
+  if(!site?.zone){renderWeather();el('empty').textContent=site?'Hourly forecast unavailable. Open Locations to refresh or choose another site.':'Open Locations to add an observing site.';return;}
   const date=localStamp(Date.now(),site.zone).slice(0,10),old=el('night').value;
   el('night').replaceChildren(...Array.from({length:7},(_,i)=>{const d=shiftDate(date,i);return option(d,d);}));
   if([...el('night').options].some(o=>o.value===old))el('night').value=old;
@@ -37,19 +53,37 @@ function compute(){
   if(changed){
     planKey=key;
     rows=samples(site,date,Date.now());
-  results=targets.map(t=>evaluate(rows,t,horizonFor(site)));
+    const horizon=horizonFor(site);
+    const floor=Math.min(...horizon);
+    recommendations=brightCatalog.filter(target=>90-Math.abs(site.lat-target[3])>=floor).slice(0,120)
+      .map(target=>evaluate(rows,target,horizon));
   }
-  function rank(r){const w=bestWindow(r,goal);return w?Math.min(goal,minutes(w.start,w.end))*1000+w.peak:0;}
-  results.sort((a,b)=>rank(b)-rank(a));
-  el('target').replaceChildren(...results.map(r=>option(r.target[0]+' · '+r.target[1],r.target[0])));
-  if(results.some(r=>r.target[0]===old))el('target').value=old;
+  const query=view==='astro'?normalizeTarget(el('targetSearch').value.trim()):'';
+  const score=result=>{
+    const window=bestWindow(result,goal);
+    return window?Math.min(goal,minutes(window.start,window.end))*1000+window.peak:0;
+  };
+  const recommended=recommendations.map(result=>[result,score(result)]).sort((a,b)=>b[1]-a[1]);
+  const hasWindow=recommended.some(([,rank])=>rank>0);
+  const matches=query?catalogSearch.filter(([,id,names])=>id.includes(query)||names.includes(query))
+    .sort((a,b)=>Number(b[1]===query)-Number(a[1]===query)):[];
+  results=query?matches.slice(0,40).map(([target])=>recommendations.find(result=>result.target===target)??evaluate(rows,target,horizonFor(site)))
+    :recommended.filter(([,rank])=>!hasWindow||rank>0).slice(0,30).map(([result])=>result);
+  if(!query&&targetById.has(old)&&!results.some(result=>result.target[0]===old))
+    results.push(evaluate(rows,targetById.get(old),horizonFor(site)));
+  el('targetStatus').textContent=query
+    ? (matches.length ? 'Showing '+Math.min(matches.length,40)+' of '+matches.length+' catalog matches.' : 'No catalog matches.')
+    : hasWindow?'Recommended for this site and night.':'No recommended shooting window. Search the catalog to check a target.';
+  el('target').replaceChildren(...results.map(result=>option(result.target[0]+' · '+result.target[1],result.target[0])));
+  if(results.some(result=>result.target[0]===old))el('target').value=old;
   ticks=rows.filter((r,i)=>i===0||new Date(r.t).getUTCMinutes()===0).map(r=>r.t);
   el('scrub').max=Math.max(0,ticks.length-1);if(changed)el('scrub').value=0;
   showTarget();
 }
 function showTarget(){
   selected=results.find(r=>r.target[0]===el('target').value);
-  if(!selected)return;
+  el('workspace').classList.toggle('noTarget',!selected);
+  if(!selected){el('advice').replaceChildren();drawTimeline();return;}
   const w=bestWindow(selected,+el('goal').value),box=el('advice');box.replaceChildren();
   if(w){
     const duration=minutes(w.start,w.end);
@@ -70,10 +104,10 @@ function canvas(id){
   c.width=w*d;c.height=h*d;const ctx=c.getContext('2d');ctx.scale(d,d);return {ctx,w,h};
 }
 function drawTimeline(){
-  if(!selected || !el('timeline').clientWidth)return;
+  if(!el('timeline').clientWidth)return;
   const {ctx,w,h}=canvas('timeline');
-  const night=selected.points.filter((_,i)=>rows[i].sun<=-6);
-  const p=night.length?night:selected.points;
+  const night=(selected?.points??[]).filter((_,i)=>rows[i].sun<=-6);
+  const p=night.length?night:(selected?.points??[]);
   if(!p.length)return;
   const left=32,right=w-19,top=14,bottom=h-60;
   const x=i=>left+(right-left)*i/Math.max(1,p.length-1);
@@ -169,29 +203,31 @@ function compare(){
 function drawFrame(){
   if(!selected||!el('frame').clientWidth)return;
   const t=selected.target,angle=Number(el('angle').value)||0,{ctx,w,h}=canvas('frame');
-  const scale=(Math.min(w,h)-18)/Math.max(91,t[4]*1.08);
+  const major=t[4],minor=t[5]??major;
+  const scale=Math.max(1,Math.min(w,h)-18)/Math.max(91,(major??0)*1.08);
   ctx.translate(w/2,h/2);ctx.scale(scale,scale);ctx.fillStyle='#8ab8cc88';
   const portrait=el('portrait');
   const photoPath='portraits/'+t[0].replaceAll(' ','')+'.jpg';
-  if(portrait.getAttribute('src')!==photoPath){
-    el('reference').hidden=false;
+  el('reference').hidden=!portraitIds.has(t[0].replaceAll(' ',''));
+  if(!el('reference').hidden && portrait.getAttribute('src')!==photoPath){
     portrait.onerror=()=>{el('reference').hidden=true;};
-    portrait.src=photoPath;portrait.alt=t[1]+' photographic reference';
+    portrait.src=photoPath;
+    portrait.alt=t[1]+' photographic reference';
     el('photoCaption').textContent=t[0]+' · DSS / STScI';
   }
-  ctx.save();ctx.rotate(-t[6]*Math.PI/180);ctx.beginPath();ctx.ellipse(0,0,t[5]/2,t[4]/2,0,0,2*Math.PI);
-  ctx.fillStyle='#99b5c328';ctx.fill();ctx.strokeStyle='#b4cfde';ctx.lineWidth=1/scale;ctx.setLineDash([3/scale,3/scale]);ctx.stroke();ctx.restore();
+  if(major){ctx.save();ctx.rotate(-t[6]*Math.PI/180);ctx.beginPath();ctx.ellipse(0,0,minor/2,major/2,0,0,2*Math.PI);
+  ctx.fillStyle='#99b5c328';ctx.fill();ctx.strokeStyle='#b4cfde';ctx.lineWidth=1/scale;ctx.setLineDash([3/scale,3/scale]);ctx.stroke();ctx.restore();}
   ctx.rotate(-angle*Math.PI/180);ctx.strokeStyle='#f5d28c';ctx.lineWidth=2/scale;ctx.strokeRect(-21.9,-38.7,43.8,77.4);
   const a=(angle-t[6])*Math.PI/180;
-  const fits=Math.hypot(t[5]*Math.cos(a),t[4]*Math.sin(a))<=43.8 && Math.hypot(t[4]*Math.cos(a),t[5]*Math.sin(a))<=77.4;
-  el('fit').textContent=(fits?'Fits one S50 frame. ':'Mosaic or tighter crop needed. ')+'S50 footprint in gold · target '+t[4]+'′ × '+t[5]+'′. '+(el('mount').value==='Alt-az'?'Field rotation changes framing over a long stack.':'Orientation assumes polar alignment.');
+  const fits=Math.hypot(minor*Math.cos(a),major*Math.sin(a))<=43.8 && Math.hypot(major*Math.cos(a),minor*Math.sin(a))<=77.4;
+  el('fit').textContent=!major?'Catalog dimensions unavailable · gold outline shows the S50 field.':(fits?'Fits one S50 frame. ':'Mosaic or tighter crop needed. ')+'S50 footprint in gold · target '+major+'′'+(t[5]?' × '+t[5]+'′':' major axis')+'. '+(el('mount').value==='Alt-az'?'Field rotation changes framing over a long stack.':'Orientation assumes polar alignment.');
 }
 function loadProject(){
   projectKey=selected.target[0];
   const p=projects[projectKey];el('angle').value=p?.angle??0;el('mount').value=p?.mount??load('mount','Alt-az');el('filter').value=p?.filter??'UV/IR cut';el('total').value=p?.goal??180;el('accepted').value=0;
   el('progress').textContent=p?p.done+' / '+p.goal+' min accepted · '+Math.max(0,p.goal-p.done)+' min remaining.':'No sessions logged for this target.';
   el('projects').replaceChildren();
-  Object.entries(projects).forEach(([id,p])=>{const b=line(el('projects'),id+' · '+p.done+'/'+p.goal+' min','button');b.onclick=()=>{el('target').value=id;showTarget();};});
+  Object.entries(projects).forEach(([id,p])=>{const b=line(el('projects'),id+' · '+p.done+'/'+p.goal+' min','button');b.onclick=()=>{el('targetSearch').value=id;compute();el('target').value=id;showTarget();};});
   drawFrame();
 }
 el('save').onclick=()=>{
@@ -204,16 +240,25 @@ el('saveHorizon').onclick=()=>{
   const values=inputs.map(i=>+i.value);if(persist('horizons-v1',{...horizons,[site.key]:values})){horizons[site.key]=values;compute();}
 };
 el('weather').onclick=()=>el('locations').showModal();
-el('details').onclick=()=>{el('locations').close();window.chrome.webview.postMessage('weather');};
+el('openSettings').onclick=()=>el('settings').showModal();
+el('temperatureUnit').onchange=()=>window.chrome.webview.postMessage('temperature:'+el('temperatureUnit').value);
+el('windUnit').onchange=()=>window.chrome.webview.postMessage('wind:'+el('windUnit').value);
+el('refreshForecast').onclick=()=>{el('matches').textContent='Refreshing forecasts…';window.chrome.webview.postMessage('refresh');};
 el('findCity').onclick=()=>{
   const q=el('searchCity').value.trim();if(q.length<2)return;
   el('matches').textContent='Searching…';window.chrome.webview.postMessage('find:'+q);
 };
 el('searchCity').onkeydown=e=>{if(e.key==='Enter')el('findCity').click();};
 function receive(data){
+  if(data.settings){
+    const {temperature,wind,about,version}=data.settings;
+    el('temperatureUnit').value=temperature;el('windUnit').value=wind;
+    el('appCredit').textContent=about;el('appVersion').textContent='Version '+version;
+    return;
+  }
   if(data.pointId!=null){receivePoint(data);return;}
   if(data.mapId!=null){receiveMap(data);return;}
-  if(Array.isArray(data)){chooseSites(data);return;}
+  if(Array.isArray(data)){if(el('matches').textContent==='Refreshing forecasts…')el('matches').textContent='';chooseSites(data);return;}
   if(data.query!==el('searchCity').value.trim())return;
   el('matches').textContent=data.error||(!data.matches?.length?'No cities found.':'');
   for(const m of data.matches??[]){
@@ -221,7 +266,9 @@ function receive(data){
     b.onclick=()=>{window.chrome.webview.postMessage('add:'+JSON.stringify(m));el('locations').close();};
   }
 }
-el('site').onchange=changeSite;el('night').onchange=()=>{el('target').selectedIndex=-1;updateView();};el('goal').onchange=el('night').onchange;
+el('site').onchange=()=>{window.chrome.webview.postMessage('select:'+el('site').value);changeSite();};el('night').onchange=()=>{el('target').selectedIndex=-1;updateView();};el('goal').onchange=el('night').onchange;
+let searchTimer;
+el('targetSearch').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(compute,120);};
 el('target').onchange=showTarget;el('scrub').oninput=compare;
 el('scrub').onchange=()=>{if(pointSelection?.popup.isOpen())showPoint();};el('angle').oninput=drawFrame;
 el('mount').onchange=()=>{persist('mount',el('mount').value);drawFrame();};

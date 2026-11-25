@@ -1,3 +1,5 @@
+// Parc Sky | weather.js
+
 let view='forecast';
 function updateView(){
   const planning=view!=='forecast';
@@ -50,7 +52,7 @@ function renderWeather(){
     line(b,new Date(d.date+'T12:00Z').toLocaleDateString(undefined,{weekday:'short',day:'numeric',timeZone:'UTC'}),'strong');line(b,d.description,'span');line(b,d.low+' / '+d.high,'span');
     b.onclick=()=>selectDay(d.date);el('daily').append(b);
   }
-  el('dusk').textContent=day?'Sunset '+day.sunset+' · Seestar S50':'';
+  el('dusk').textContent=day?(day.sunset?'Sunset '+day.sunset+' · ':'')+'Seestar S50':'';
   el('nightTitle').textContent=day?'Night of '+el('dayLabel').textContent:'Observing plan';
   el('plan').disabled=!day;
   document.querySelectorAll('#forecast > section:not(#hero)').forEach(s=>s.hidden=!day);

@@ -1,0 +1,5 @@
+NGC.csv SHA-256 54abea0b57b0a103831bfc7a8e3a99a23acfbf4bb581fcf3d8af539cbb826c84OpenNGC by Mattia Verga. https://github.com/mattiaverga/OpenNGC
+This extract is licensed under CC BY-SA 4.0. https://creativecommons.org/licenses/by-sa/4.0/
+Converted J2000 coordinates to degrees, normalized identifiers and retained deep-sky objects and selected fields.
+
+addendum.csv SHA-256 c93f983dda6780b76b7b2e9271a856a892627710148a982ee98101a54c642fdd

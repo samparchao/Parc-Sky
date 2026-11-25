@@ -1,20 +1,5 @@
-// Coordinates are J2000 degrees. Approximate apparent major/minor axes are in arcminutes.
-const targets = [
-  ['M31','Andromeda Galaxy',10.685,41.269,190,60,35],
-  ['M33','Triangulum Galaxy',23.462,30.66,71,42,23],
-  ['M42','Orion Nebula',83.822,-5.391,85,60,0],
-  ['M45','Pleiades',56.75,24.117,110,110,0],
-  ['M27','Dumbbell Nebula',299.902,22.721,8,6,0],
-  ['M57','Ring Nebula',283.396,33.029,1.4,1,60],
-  ['M13','Hercules Cluster',250.423,36.461,20,20,0],
-  ['M51','Whirlpool Galaxy',202.47,47.195,11,7,165],
-  ['M81','Bode’s Galaxy',148.888,69.065,27,14,157],
-  ['M101','Pinwheel Galaxy',210.802,54.349,29,27,0],
-  ['NGC 253','Sculptor Galaxy',11.888,-25.288,28,7,52],
-  ['NGC 5139','Omega Centauri',201.697,-47.48,36,36,0],
-  ['NGC 3372','Carina Nebula',161.27,-59.87,120,120,0],
-  ['NGC 104','47 Tucanae',6.024,-72.081,31,31,0]
-];
+// Parc Sky | engine.js
+
 const step=5*60000, hour=3600000;
 const clocks=new Map();
 function localStamp(time,zone){
@@ -51,8 +36,8 @@ function samples(site,date,now){
 function evaluate(rows,target,horizon){
   const windows=[], points=[];
   let current=null;
+  const vector=Astronomy.VectorFromSphere(new Astronomy.Spherical(target[3],target[2],1),rows[0]?.d??new Date(0));
   for(const row of rows){
-    const vector=Astronomy.VectorFromSphere(new Astronomy.Spherical(target[3],target[2],1),row.d);
     const eq=Astronomy.EquatorFromVector(Astronomy.RotateVector(row.rotation,vector));
     const pos=Astronomy.Horizon(row.d,row.observer,eq.ra,eq.dec);
     const floor=horizon[Math.floor((pos.azimuth+22.5)%360/45)];
@@ -72,10 +57,10 @@ function nextWindow(result,after){
   return result.windows.find(w=>w.end>after);
 }
 function bestWindow(result,goal){
-  return result.windows.slice().sort((a,b)=>{
-    const sufficient=w=>w.end-w.start>=goal*60000;
-    if(sufficient(a)!==sufficient(b))return sufficient(b)-sufficient(a);
-    if(sufficient(a))return a.start-b.start;
-    return (b.end-b.start)-(a.end-a.start);
-  })[0];
+  let longest;
+  for(const window of result.windows){
+    if(window.end-window.start>=goal*60000)return window;
+    if(!longest||window.end-window.start>longest.end-longest.start)longest=window;
+  }
+  return longest;
 }

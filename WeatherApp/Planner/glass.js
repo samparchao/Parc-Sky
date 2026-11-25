@@ -1,3 +1,5 @@
+// Parc Sky | glass.js
+
 // Rain lives in the hero's own coordinate system so resizing the window keeps beads anchored.
 const glassWeather=(()=>{
   const canvas=document.getElementById('glass'),ctx=canvas.getContext('2d');

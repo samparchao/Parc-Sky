@@ -1,3 +1,6 @@
+// Parc Sky | MapForecast.cs
+// Created by Samuel Teixeira Parchao
+
 using System;
 using System.Globalization;
 using System.Linq;
@@ -11,8 +14,16 @@ namespace WeatherApp.Services;
 internal static class MapForecast
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(16) };
+    /// <summary>One map grid or point lookup.</summary>
+    /// <param name="Id">Caller-generated response correlation identifier.</param>
+    /// <param name="Points">Alternating latitude and longitude values in decimal degrees.</param>
+    /// <param name="Day">Forecast date in UTC, formatted as yyyy-MM-dd.</param>
     public record Request(int Id, double[] Points, string Day);
 
+    /// <summary>Downloads the requested hourly map values from Open-Meteo.</summary>
+    /// <param name="request">Coordinates and forecast date.</param>
+    /// <param name="cancellation">Token for replacing a superseded lookup.</param>
+    /// <returns>Four consecutive 24-hour series per location, with -9999 for unavailable values.</returns>
     public static async Task<double[]> LoadAsync(Request request, CancellationToken cancellation)
     {
         if (request.Points is not { Length: 2 or 96 } ||

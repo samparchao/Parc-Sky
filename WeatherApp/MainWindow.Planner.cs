@@ -1,3 +1,6 @@
+// Parc Sky | MainWindow.Planner.cs
+// Created by Samuel Teixeira Parchao
+
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
@@ -9,6 +12,7 @@ using System.Threading.Tasks;
 
 namespace WeatherApp;
 
+/// <summary>Connects the planner interface to the native application services.</summary>
 public sealed partial class MainWindow
 {
     private readonly WebView2 shootPlanner = new();
@@ -54,10 +58,29 @@ public sealed partial class MainWindow
                         if (match != null) await AddOrActivateTrackedCityAsync(match.CityName, match.Latitude, match.Longitude, true);
                         return;
                     }
+                    if (message.StartsWith("select:"))
+                    {
+                        int index = trackedCities.FindIndex(city => GetCityKey(city.Latitude, city.Longitude) == message.Substring(7));
+                        if (index >= 0) { activeTrackedCityIndex = index; userSelectedSite = true; }
+                        return;
+                    }
+                    if (message.StartsWith("remove:"))
+                    {
+                        RemoveSavedLocation(message.Substring(7));
+                        return;
+                    }
                     switch (message)
                     {
-                        case "ready": plannerReady = true; SendPlannerSites(); break;
-                        case "weather": shootPlanner.Visibility = Visibility.Collapsed; break;
+                        case "ready":
+                            plannerReady = true;
+                            SendPlannerSettings();
+                            SendPlannerSites();
+                            break;
+                        case "refresh": await RefreshSavedForecastsAsync(); break;
+                        case "temperature:Celsius": ChangeUnits(TemperatureUnit.Celsius, windSpeedUnit); break;
+                        case "temperature:Fahrenheit": ChangeUnits(TemperatureUnit.Fahrenheit, windSpeedUnit); break;
+                        case "wind:KilometersPerHour": ChangeUnits(temperatureUnit, WindSpeedUnit.KilometersPerHour); break;
+                        case "wind:MilesPerHour": ChangeUnits(temperatureUnit, WindSpeedUnit.MilesPerHour); break;
                     }
                 };
                 core.NavigationStarting += (_, args) => args.Cancel = args.Uri != "https://planner.example/index.html";
@@ -68,8 +91,7 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(ex);
-            shootPlanner.Visibility = Visibility.Collapsed;
-            ToolTipService.SetToolTip(shootPlanner, "Planner unavailable");
+            Content = new TextBlock { Text = "Parc Sky could not open. Check that Microsoft Edge WebView2 Runtime is installed.", Margin = new Thickness(24), TextWrapping = TextWrapping.Wrap };
         }
     }
 
@@ -101,6 +123,21 @@ public sealed partial class MainWindow
         }
     }
 
+    private void ChangeUnits(TemperatureUnit temperature, WindSpeedUnit wind)
+    {
+        temperatureUnit = temperature;
+        windSpeedUnit = wind;
+        SaveSettings();
+        SendPlannerSettings();
+        SendPlannerSites();
+    }
+
+    private void SendPlannerSettings() =>
+        shootPlanner.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            settings = new { temperature = temperatureUnit.ToString(), wind = windSpeedUnit.ToString(), about = AppInfo.AboutText, version = AppInfo.Version }
+        }));
+
     private void SendPlannerSites()
     {
         if (!plannerReady) return;
@@ -110,9 +147,9 @@ public sealed partial class MainWindow
             trackedCityWeather.TryGetValue(key, out var forecast);
             return new {
                 key, name = city.Name, lat = city.Latitude, lon = city.Longitude,
-                fahrenheit = temperatureUnit == TemperatureUnit.Fahrenheit, active = index == activeTrackedCityIndex, zone = forecast?.TimeZone,
-                current = forecast == null ? null : new { temp = FormatTemperature(forecast.Current.Temperature), code = forecast.Current.WeatherCode, description = Services.WeatherService.MapWeatherCode(forecast.Current.WeatherCode).Desc },
-                days = forecast?.Daily.Select(d => new { date = d.Date.ToString("yyyy-MM-dd"), code = d.WeatherCode, description = Services.WeatherService.MapWeatherCode(d.WeatherCode).Desc, high = FormatTemperature(d.TempMax), low = FormatTemperature(d.TempMin), sunset = d.Sunset.ToString("HH:mm"), sunrise = d.Sunrise.ToString("HH:mm"), humidity = d.Humidity }),
+                fahrenheit = temperatureUnit == TemperatureUnit.Fahrenheit, mph = windSpeedUnit == WindSpeedUnit.MilesPerHour, saved = city.IsFavorite, active = index == activeTrackedCityIndex, zone = forecast?.TimeZone,
+                current = forecast == null ? null : new { temp = FormatTemperature(forecast.Current.Temperature), code = forecast.Current.WeatherCode, description = Services.WeatherService.DescribeWeatherCode(forecast.Current.WeatherCode) },
+                days = forecast?.Daily.Select(d => new { date = d.Date.ToString("yyyy-MM-dd"), code = d.WeatherCode, description = Services.WeatherService.DescribeWeatherCode(d.WeatherCode), high = FormatTemperature(d.TempMax), low = FormatTemperature(d.TempMin), sunset = d.Sunset?.ToString("HH:mm"), sunrise = d.Sunrise?.ToString("HH:mm") }),
                 hours = forecast?.Hourly.Select(h => new {
                     time = h.Time.ToString("yyyy-MM-ddTHH", System.Globalization.CultureInfo.InvariantCulture),
                     temperature = h.Temperature, gust = h.WindGust, rainfall = h.Rainfall, temp = FormatTemperature(h.Temperature), cloud = h.CloudCover, rain = h.Precipitation, probability = h.PrecipitationProbability

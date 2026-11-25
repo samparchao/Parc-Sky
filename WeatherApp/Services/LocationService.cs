@@ -1,6 +1,12 @@
+// Parc Sky | LocationService.cs
+// Created by Samuel Teixeira Parchao
+
 // Created by Samuel Teixeira Parchao
 // Last modified: 13/02/2026
+#nullable enable
+
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
@@ -33,6 +39,7 @@ internal sealed class LocationService
     /// <param name="Longitude">Longitude in decimal degrees.</param>
     public record CitySearchResult(string CityName, string DisplayName, double Latitude, double Longitude)
     {
+        /// <inheritdoc/>
         public override string ToString()
         {
             return DisplayName;
@@ -63,6 +70,10 @@ internal sealed class LocationService
         return new LocationResult(cityName, lat, lon);
     }
 
+    /// <summary>Finds candidate cities by name.</summary>
+    /// <param name="query">City name to search for.</param>
+    /// <param name="limit">Maximum number of results.</param>
+    /// <returns>Matching locations with their coordinates.</returns>
     public static async Task<IReadOnlyList<CitySearchResult>> SearchCitiesAsync(string query, int limit = 6)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -93,8 +104,8 @@ internal sealed class LocationService
                 continue;
             }
 
-            if (!Double.TryParse(latElement.GetString(), out Double latitude) ||
-                !Double.TryParse(lonElement.GetString(), out Double longitude))
+            if (!Double.TryParse(latElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out Double latitude) ||
+                !Double.TryParse(lonElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out Double longitude))
             {
                 continue;
             }
