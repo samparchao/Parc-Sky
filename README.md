@@ -22,6 +22,10 @@ Compare saved sites using temperature, cloud cover, rainfall, wind gusts, or mod
 
 Screenshots show sample forecasts for public locations. The light-pollution image uses the bundled 2016 skyglow atlas.
 
+## Download
+
+Get the [latest Windows x64 installer](https://github.com/samparchao/WeatherApp/releases/latest). It installs Parc Sky for your Windows user and adds a Start menu shortcut. Microsoft Edge WebView2 Runtime is required.
+
 ## Build and run
 
 1. On Windows, install Visual Studio with WinUI 3 development support, the .NET 8 SDK, and the Microsoft Edge WebView2 Runtime.

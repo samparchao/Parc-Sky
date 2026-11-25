@@ -8,6 +8,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.IO;
+using System.Runtime.InteropServices;
+using Windows.Foundation.Collections;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -136,15 +139,15 @@ public sealed partial class MainWindow : Window
 
     private void LoadSettings()
     {
-        var settings = ApplicationData.Current.LocalSettings.Values;
-        if (settings.TryGetValue(TemperatureUnitSettingKey, out var temp) && temp is string tempText &&
+        IDictionary<string, string> settings = ReadPreferences();
+        if (settings.TryGetValue(TemperatureUnitSettingKey, out string tempText) &&
             Enum.TryParse(tempText, out TemperatureUnit temperature) && Enum.IsDefined(temperature))
             temperatureUnit = temperature;
-        if (settings.TryGetValue(WindSpeedUnitSettingKey, out var wind) && wind is string windText &&
+        if (settings.TryGetValue(WindSpeedUnitSettingKey, out string windText) &&
             Enum.TryParse(windText, out WindSpeedUnit speed) && Enum.IsDefined(speed))
             windSpeedUnit = speed;
 
-        if (!settings.TryGetValue(TrackedCitiesSettingKey, out var saved) || saved is not string json) return;
+        if (!settings.TryGetValue(TrackedCitiesSettingKey, out string json)) return;
         try
         {
             var locations = JsonSerializer.Deserialize<SavedTrackedCity[]>(json) ?? Array.Empty<SavedTrackedCity>();
@@ -157,11 +160,56 @@ public sealed partial class MainWindow : Window
 
     private void SaveSettings()
     {
-        var settings = ApplicationData.Current.LocalSettings.Values;
-        settings[TemperatureUnitSettingKey] = temperatureUnit.ToString();
-        settings[WindSpeedUnitSettingKey] = windSpeedUnit.ToString();
-        settings[TrackedCitiesSettingKey] = JsonSerializer.Serialize(trackedCities.Where(city => city.IsFavorite)
-            .Select(city => new SavedTrackedCity(city.Name, city.Latitude, city.Longitude)));
+        var settings = new Dictionary<string, string>
+        {
+            [TemperatureUnitSettingKey] = temperatureUnit.ToString(),
+            [WindSpeedUnitSettingKey] = windSpeedUnit.ToString(),
+            [TrackedCitiesSettingKey] = JsonSerializer.Serialize(trackedCities.Where(city => city.IsFavorite)
+                .Select(city => new SavedTrackedCity(city.Name, city.Latitude, city.Longitude)))
+        };
+        IPropertySet packaged = TryGetPackagedSettings();
+        if (packaged != null)
+        {
+            foreach (var setting in settings) packaged[setting.Key] = setting.Value;
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(PreferencesPath));
+            string temporaryFile = PreferencesPath + "." + Environment.ProcessId + ".tmp";
+            File.WriteAllText(temporaryFile, JsonSerializer.Serialize(settings));
+            File.Move(temporaryFile, PreferencesPath, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Debug.WriteLine(ex); }
+    }
+
+    private static string PreferencesPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Parc Sky", "preferences.json");
+
+    private static IDictionary<string, string> ReadPreferences()
+    {
+        IPropertySet packaged = TryGetPackagedSettings();
+        if (packaged != null)
+            return packaged.Where(setting => setting.Value is string)
+                .ToDictionary(setting => setting.Key, setting => (string)setting.Value);
+        try
+        {
+            if (File.Exists(PreferencesPath))
+                return JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(PreferencesPath)) ?? new();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { Debug.WriteLine(ex); }
+        return new Dictionary<string, string>();
+    }
+
+    private static IPropertySet TryGetPackagedSettings()
+    {
+        try { return ApplicationData.Current.LocalSettings.Values; }
+        catch (Exception ex) when (ex is InvalidOperationException or COMException)
+        {
+            // The standalone installer runs without an MSIX package identity.
+            return null;
+        }
     }
 
     private static string GetCityKey(double latitude, double longitude) =>

@@ -31,3 +31,6 @@ TestResults/
 # Retired native forecast icon assets
 /WeatherApp/Assets/WeatherIcons/
 /WeatherApp/Assets/weathericons-regular-webfont.ttf
+
+# Local GitHub metadata
+/.github/
