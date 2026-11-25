@@ -24,7 +24,7 @@ Screenshots show sample forecasts for public locations. The light-pollution imag
 
 ## Download
 
-Get the [latest Windows x64 installer](https://github.com/samparchao/WeatherApp/releases/latest). It installs Parc Sky for your Windows user and adds a Start menu shortcut. Microsoft Edge WebView2 Runtime is required.
+Get the [latest Windows x64 installer](https://github.com/samparchao/Parc-Sky/releases/latest). It installs Parc Sky for your Windows user and adds a Start menu shortcut. Microsoft Edge WebView2 Runtime is required.
 
 ## Build and run
 
